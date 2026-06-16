@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ポモドーロタイマー</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 28px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      letter-spacing: 0.12em;
+      color: #a29bfe;
+      font-weight: 500;
+    }
+
+    /* Mode tabs */
+    .modes {
+      display: flex;
+      gap: 8px;
+    }
+    .mode-btn {
+      padding: 6px 18px;
+      border-radius: 20px;
+      border: none;
+      font-size: 0.85rem;
+      cursor: pointer;
+      background: #2d2d4e;
+      color: #aaa;
+      transition: all 0.2s;
+    }
+    .mode-btn.active {
+      background: #6c5ce7;
+      color: #fff;
+    }
+
+    /* Timer ring */
+    .ring-wrap {
+      position: relative;
+      width: 240px;
+      height: 240px;
+    }
+    .ring-wrap svg {
+      transform: rotate(-90deg);
+      width: 240px;
+      height: 240px;
+    }
+    .ring-bg { fill: none; stroke: #2d2d4e; stroke-width: 10; }
+    .ring-progress {
+      fill: none;
+      stroke: #6c5ce7;
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1s linear, stroke 0.4s;
+    }
+    .timer-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .timer-digits {
+      font-size: 3.2rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+    }
+    .timer-label {
+      font-size: 0.8rem;
+      color: #888;
+      letter-spacing: 0.08em;
+    }
+
+    /* Task input */
+    .task-wrap {
+      display: flex;
+      gap: 8px;
+      width: 320px;
+    }
+    .task-input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #3d3d6e;
+      background: #2d2d4e;
+      color: #eee;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .task-input:focus { border-color: #6c5ce7; }
+    .task-input::placeholder { color: #666; }
+
+    /* Controls */
+    .controls { display: flex; gap: 12px; }
+    .btn {
+      padding: 12px 32px;
+      border-radius: 12px;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary {
+      background: #6c5ce7;
+      color: #fff;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .btn-primary:hover { background: #7d70f0; }
+    .btn-secondary {
+      background: #2d2d4e;
+      color: #aaa;
+    }
+    .btn-secondary:hover { background: #3a3a60; color: #eee; }
+
+    /* Session history */
+    .sessions {
+      width: 320px;
+    }
+    .sessions h2 {
+      font-size: 0.8rem;
+      color: #888;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+    }
+    .session-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .session-item {
+      background: #2d2d4e;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: fadeIn 0.3s ease;
+    }
+    .session-item .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #6c5ce7;
+      flex-shrink: 0;
+      margin-right: 8px;
+    }
+    .session-item .name { flex: 1; color: #ccc; }
+    .session-item .time { color: #666; font-size: 0.75rem; }
+    .session-item .gcal-btn {
+      margin-left: 8px;
+      padding: 3px 8px;
+      background: #1a73e8;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      text-decoration: none;
+      white-space: nowrap;
+      opacity: 0.85;
+      transition: opacity 0.15s;
+    }
+    .session-item .gcal-btn:hover { opacity: 1; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Notification badge */
+    .pomodoro-count {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .tomato { font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+
+  <h1>🍅 ポモドーロタイマー</h1>
+
+  <div class="modes">
+    <button class="mode-btn active" data-mode="work" data-minutes="25">作業 25分</button>
+    <button class="mode-btn" data-mode="short" data-minutes="5">休憩 5分</button>
+    <button class="mode-btn" data-mode="long" data-minutes="15">長休憩 15分</button>
+  </div>
+
+  <div class="ring-wrap">
+    <svg viewBox="0 0 240 240">
+      <circle class="ring-bg" cx="120" cy="120" r="108"/>
+      <circle class="ring-progress" id="ring" cx="120" cy="120" r="108"
+        stroke-dasharray="678.6" stroke-dashoffset="0"/>
+    </svg>
+    <div class="timer-text">
+      <div class="timer-digits" id="display">25:00</div>
+      <div class="timer-label" id="mode-label">作業セッション</div>
+    </div>
+  </div>
+
+  <div class="pomodoro-count" id="pomodoro-count"></div>
+
+  <div class="task-wrap">
+    <input class="task-input" id="task-input" type="text" placeholder="今日のタスクを入力...">
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-primary" id="start-btn" onclick="toggleTimer()">スタート</button>
+    <button class="btn btn-secondary" onclick="resetTimer()">リセット</button>
+  </div>
+
+  <div class="sessions">
+    <h2>完了セッション</h2>
+    <div class="session-list" id="session-list"></div>
+  </div>
+
+  <script>
+    const CIRCUMFERENCE = 2 * Math.PI * 108; // ≈ 678.6
+
+    const modes = {
+      work:  { label: '作業セッション', color: '#6c5ce7', minutes: 25 },
+      short: { label: '短い休憩',       color: '#00b894', minutes: 5  },
+      long:  { label: '長い休憩',       color: '#0984e3', minutes: 15 },
+    };
+
+    let currentMode = 'work';
+    let totalSeconds = 25 * 60;
+    let remaining = totalSeconds;
+    let running = false;
+    let interval = null;
+    let pomodoroCount = 0;
+    let sessionStartTime = null;
+
+    const display   = document.getElementById('display');
+    const modeLabel = document.getElementById('mode-label');
+    const ring      = document.getElementById('ring');
+    const startBtn  = document.getElementById('start-btn');
+    const sessionList = document.getElementById('session-list');
+    const pomodoroCountEl = document.getElementById('pomodoro-count');
+
+    function setMode(mode, minutes) {
+      if (running) return;
+      currentMode = mode;
+      const m = minutes || modes[mode].minutes;
+      totalSeconds = m * 60;
+      remaining = totalSeconds;
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+      modeLabel.textContent = modes[mode].label;
+      ring.style.stroke = modes[mode].color;
+      updateDisplay();
+      updateRing();
+    }
+
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setMode(btn.dataset.mode, parseInt(btn.dataset.minutes));
+      });
+    });
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function updateDisplay() {
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      display.textContent = `${pad(m)}:${pad(s)}`;
+      document.title = `${pad(m)}:${pad(s)} — ポモドーロ`;
+    }
+
+    function updateRing() {
+      const fraction = remaining / totalSeconds;
+      ring.style.strokeDashoffset = CIRCUMFERENCE * (1 - fraction);
+    }
+
+    function toggleTimer() {
+      if (running) {
+        clearInterval(interval);
+        running = false;
+        startBtn.textContent = '再開';
+      } else {
+        running = true;
+        if (!sessionStartTime) sessionStartTime = new Date();
+        startBtn.textContent = '一時停止';
+        interval = setInterval(tick, 1000);
+      }
+    }
+
+    function tick() {
+      if (remaining <= 0) {
+        clearInterval(interval);
+        running = false;
+        startBtn.textContent = 'スタート';
+        onComplete();
+        return;
+      }
+      remaining--;
+      updateDisplay();
+      updateRing();
+    }
+
+    function resetTimer() {
+      clearInterval(interval);
+      running = false;
+      remaining = totalSeconds;
+      sessionStartTime = null;
+      startBtn.textContent = 'スタート';
+      updateDisplay();
+      updateRing();
+    }
+
+    function onComplete() {
+      const task = document.getElementById('task-input').value.trim() || 'ポモドーロセッション';
+      const endTime = new Date();
+      const startTime = sessionStartTime || new Date(endTime - totalSeconds * 1000);
+      const timeStr = `${pad(startTime.getHours())}:${pad(startTime.getMinutes())}`;
+
+      if (currentMode === 'work') {
+        pomodoroCount++;
+        addSessionItem(task, timeStr, startTime, endTime);
+        updatePomodoroCount();
+        notify('作業セッション完了！休憩しましょう 🍅');
+      } else {
+        notify('休憩終了！作業を再開しましょう ✨');
+      }
+
+      sessionStartTime = null;
+      remaining = 0;
+      updateDisplay();
+      updateRing();
+    }
+
+    function gcalUrl(task, start, end) {
+      function fmt(d) {
+        return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      }
+      const base = 'https://calendar.google.com/calendar/render';
+      const text = encodeURIComponent(`作業）${task}`);
+      const dates = `${fmt(start)}/${fmt(end)}`;
+      const details = encodeURIComponent('ポモドーロタイマーで完了した作業セッション');
+      return `${base}?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
+    }
+
+    function addSessionItem(task, time, startTime, endTime) {
+      const item = document.createElement('div');
+      item.className = 'session-item';
+      const url = gcalUrl(task, startTime, endTime);
+      item.innerHTML = `<div class="dot"></div><div class="name">${escHtml(task)}</div><div class="time">${time}</div><a class="gcal-btn" href="${url}" target="_blank" rel="noopener">📅 カレンダー</a>`;
+      sessionList.prepend(item);
+    }
+
+    function updatePomodoroCount() {
+      pomodoroCountEl.innerHTML = Array.from({length: pomodoroCount}, () => '<span class="tomato">🍅</span>').join('');
+    }
+
+    function notify(msg) {
+      if (Notification.permission === 'granted') {
+        new Notification('ポモドーロタイマー', { body: msg, icon: '🍅' });
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(p => {
+          if (p === 'granted') new Notification('ポモドーロタイマー', { body: msg });
+        });
+      }
+      // Also flash title
+      let flashing = true;
+      const orig = document.title;
+      const flashInterval = setInterval(() => {
+        document.title = flashing ? '🍅 完了！' : orig;
+        flashing = !flashing;
+      }, 800);
+      setTimeout(() => { clearInterval(flashInterval); document.title = orig; }, 6000);
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // Init
+    ring.style.stroke = modes[currentMode].color;
+    ring.style.strokeDasharray = CIRCUMFERENCE;
+    ring.style.strokeDashoffset = 0;
+    updateDisplay();
+  </script>
+</body>
+</html>
