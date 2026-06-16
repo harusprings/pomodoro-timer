@@ -352,7 +352,7 @@
         return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
       }
       const base = 'https://calendar.google.com/calendar/render';
-      const text = encodeURIComponent(`作業）${task}`);
+      const text = encodeURIComponent(`（作業）${task}`);
       const dates = `${fmt(start)}/${fmt(end)}`;
       const details = encodeURIComponent('ポモドーロタイマーで完了した作業セッション');
       return `${base}?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
